@@ -76,10 +76,13 @@ with st.container():
     url = st.text_input('Input Url', key='stream_url',
                         placeholder='URL : https://*.mp4 or avi or any video format ')
     if url:
-        plot_box = st.checkbox('Disable Box Annotate')
-        annotation = st.checkbox('Disable Annotate')
-        plot_box = not plot_box
-        annotation = not annotation
+        col1, col2 = st.columns(2)
+        with col1:
+            plot_box = st.checkbox('Disable Box Annotate')
+            plot_box = not plot_box
+        with col2:
+            annotation = st.checkbox('Disable Annotate')
+            annotation = not annotation
         cap = MediaPlayer(url).video
         webrtc_streamer(key='video', mode=WebRtcMode.RECVONLY,
                         video_frame_callback=video_frame_callback, source_video_track=cap)
