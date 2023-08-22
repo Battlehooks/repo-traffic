@@ -4,11 +4,21 @@ import numpy as np
 import cv2 as cv
 import time
 from ultralytics import YOLO
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import av
+from aiortc import MediaStreamTrack
+from aiortc.contrib.media import MediaPlayer
 fps = 20
 spf = 1/fps
 dy = 15
 x, y = 10, 20
 annot = (x, y)
+font = cv.FONT_HERSHEY_SIMPLEX
+color_black = (0, 0, 0)
+color_white = (255, 255, 255)
+thick_inline = 1
+thick_outline = 2
+fontScale = .5
 model = YOLO('runs/detect/train/weights/best.pt')
 
 st.title('Bandung SlowMo Traffic Detector')
@@ -17,11 +27,6 @@ video = 0
 with st.sidebar:
     video = st.button('Video Traffic Check', use_container_width=True)
     st.button('Traffic Realtime Monitor', use_container_width=True)
-
-btn_change = '''
-    <script>
-        var elements = window.parent.document.querySelectorAll(')
-'''
 
 
 def weighting(count) -> int:
@@ -46,45 +51,35 @@ def weighting(count) -> int:
     return dicts
 
 
+def video_frame_callback(frame):
+    x, y = 10, 20
+    annot = (x, y)
+    frame = frame.to_ndarray(format='bgr24')
+    result = model(frame, imgsz=360)[0]
+    frame_res = result.plot(boxes=plot_box)
+    weights = weighting(result.boxes.cls)
+    if annotation:
+        for k, v in weights.items():
+            frame_res = cv.putText(
+                frame_res, f'{k} : {v:.1f}', (
+                    x, y), font, fontScale, color_black, thick_outline, cv.LINE_AA, False
+            )
+            frame_res = cv.putText(
+                frame_res, f'{k} : {v:.1f}', (
+                    x, y), font, fontScale, color_white, thick_inline, cv.LINE_AA, False
+            )
+            y = y + dy
+    return av.VideoFrame.from_ndarray(frame_res, format='bgr24')
+
+
 with st.container():
-    url = st.text_input('Input Url', key='stream_url')
-    cap = cv.VideoCapture(url)
+    url = st.text_input('Input Url', key='stream_url',
+                        placeholder='URL : https://*.mp4 or avi or any video format ')
     if url:
-        font = cv.FONT_HERSHEY_SIMPLEX
-        color_black = (0, 0, 0)
-        color_white = (255, 255, 255)
-        thick_inline = 1
-        thick_outline = 2
-        fontScale = .5
-        stopped_btn = st.checkbox('Stop')
         plot_box = st.checkbox('Disable Box Annotate')
         annotation = st.checkbox('Disable Annotate')
         plot_box = not plot_box
         annotation = not annotation
-        img = st.image([], use_column_width=True)
-        while not stopped_btn:
-            x, y = 10, 20
-            annot = (x, y)
-            current = time.time()
-            ret, frame = cap.read()
-            result = model(frame, imgsz=360)[0]
-            frame_res = result.plot(
-                labels=plot_box, boxes=plot_box, masks=plot_box, probs=plot_box)
-            frame_res = cv.cvtColor(frame_res, cv.COLOR_BGR2RGB)
-            weights = weighting(result.boxes.cls)
-            if annotation:
-                for k, v in weights.items():
-                    frame_res = cv.putText(
-                        frame_res, f'{k} : {v:.1f}', (
-                            x, y), font, fontScale, color_black, thick_outline, cv.LINE_AA, False
-                    )
-                    frame_res = cv.putText(
-                        frame_res, f'{k} : {v:.1f}', (
-                            x, y), font, fontScale, color_white, thick_inline, cv.LINE_AA, False
-                    )
-                    y = y + dy
-            img.image(frame_res)
-            duration = time.time() - current
-            if duration < spf:
-                time.sleep(spf-duration)
-        cap.release()
+        cap = MediaPlayer(url).video
+        webrtc_streamer(key='video', mode=WebRtcMode.RECVONLY,
+                        video_frame_callback=video_frame_callback, source_video_track=cap)
