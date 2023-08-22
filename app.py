@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import streamlit.components.v1 as components
 import numpy as np
@@ -8,7 +9,7 @@ from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import av
 from aiortc import MediaStreamTrack
 from aiortc.contrib.media import MediaPlayer
-fps = 20
+fps = 18
 spf = 1/fps
 dy = 15
 x, y = 10, 20
@@ -51,38 +52,47 @@ def weighting(count) -> int:
     return dicts
 
 
-def video_frame_callback(frame):
-    x, y = 10, 20
-    annot = (x, y)
-    frame = frame.to_ndarray(format='bgr24')
-    result = model(frame, imgsz=360)[0]
-    frame_res = result.plot(boxes=plot_box)
-    weights = weighting(result.boxes.cls)
-    if annotation:
-        for k, v in weights.items():
-            frame_res = cv.putText(
-                frame_res, f'{k} : {v:.1f}', (
-                    x, y), font, fontScale, color_black, thick_outline, cv.LINE_AA, False
-            )
-            frame_res = cv.putText(
-                frame_res, f'{k} : {v:.1f}', (
-                    x, y), font, fontScale, color_white, thick_inline, cv.LINE_AA, False
-            )
-            y = y + dy
-    return av.VideoFrame.from_ndarray(frame_res, format='bgr24')
+url = st.text_input('Input Url', key='stream_url',
+                    placeholder='URL : https://*.mp4 or avi or any video format ')
+if url:
+    st.write(
+        '''
+        <p style="color:red">Note : If changing URL, press STOP and START again to restart video.</p>
+        ''', unsafe_allow_html=True
+    )
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        plot_box = st.checkbox('Disable Box Annotate')
+        plot_box = not plot_box
+    with col2:
+        annotation = st.checkbox('Disable Annotate')
+        annotation = not annotation
+    with col3:
+        stopped = st.checkbox('STOP')
 
+    image = st.image([], use_column_width=True)
+    cap = cv.VideoCapture(url)
 
-with st.container():
-    url = st.text_input('Input Url', key='stream_url',
-                        placeholder='URL : https://*.mp4 or avi or any video format ')
-    if url:
-        col1, col2 = st.columns(2)
-        with col1:
-            plot_box = st.checkbox('Disable Box Annotate')
-            plot_box = not plot_box
-        with col2:
-            annotation = st.checkbox('Disable Annotate')
-            annotation = not annotation
-        cap = MediaPlayer(url).video
-        webrtc_streamer(key='video', mode=WebRtcMode.RECVONLY,
-                        video_frame_callback=video_frame_callback, source_video_track=cap)
+    while not stopped:
+        y = 20
+        current = time.time()
+        ret, frame = cap.read()
+        result = model.predict(frame, imgsz=240)[0]
+        frame_res = result.plot()
+        weights = weighting(result.boxes.cls)
+        if annotation:
+            for k, v in weights.items():
+                frame_res = cv.putText(
+                    frame_res, f'{k} : {v:.1f}', (
+                        x, y), font, fontScale, color_black, thick_outline, cv.LINE_AA, False
+                )
+                frame_res = cv.putText(
+                    frame_res, f'{k} : {v:.1f}', (
+                        x, y), font, fontScale, color_white, thick_inline, cv.LINE_AA, False
+                )
+                y = y + dy
+        image.image(frame_res)
+        duration = time.time() - current
+        if (duration < spf):
+            time.sleep(spf - duration)
+    cap.release()
