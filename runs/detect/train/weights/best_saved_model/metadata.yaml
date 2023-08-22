@@ -1,0 +1,19 @@
+description: Ultralytics best model trained on datasets/bandung-cctv-traffic-dataset/data.yaml
+author: Ultralytics
+license: AGPL-3.0 https://ultralytics.com/license
+date: '2023-08-21T23:25:37.027987'
+version: 8.0.158
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: ambulance
+  1: bunch of motorcycle
+  2: bus
+  3: cars
+  4: d
+  5: motorcycle
+  6: truck
