@@ -5,10 +5,6 @@ import numpy as np
 import cv2 as cv
 import time
 from ultralytics import YOLO
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
-import av
-from aiortc import MediaStreamTrack
-from aiortc.contrib.media import MediaPlayer
 fps = 18
 spf = 1/fps
 dy = 15
@@ -71,14 +67,15 @@ if url:
         stopped = st.checkbox('STOP')
 
     image = st.image([], use_column_width=True)
-    cap = cv.VideoCapture(url)
 
     while not stopped:
+        cap = cv.VideoCapture(url)
         y = 20
         current = time.time()
         ret, frame = cap.read()
-        result = model.predict(frame, imgsz=240)[0]
-        frame_res = result.plot()
+        result = model.predict(frame, imgsz=240, conf=.15, iou=.3)[0]
+        frame_res = result.plot(boxes=plot_box)
+        frame_res = cv.cvtColor(frame_res, cv.COLOR_BGR2RGB)
         weights = weighting(result.boxes.cls)
         if annotation:
             for k, v in weights.items():
@@ -93,6 +90,5 @@ if url:
                 y = y + dy
         image.image(frame_res)
         duration = time.time() - current
-        if (duration < spf):
-            time.sleep(spf - duration)
-    cap.release()
+        time.sleep(.5)
+        cap.release()
